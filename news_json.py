@@ -23,9 +23,10 @@ DB_NAME = "newsDB"
 COLLECTION_NAME = "news"
 
 # Load environment variables from .env
-mongo_uri =  "mongodb+srv://vasa2949:sandy@cluster0.j5gm2.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-aws_access_key_id = "AKIATX3PIEYISJJ2L74A"
-aws_secret_access_key='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'
+load_dotenv()
+mongo_uri = os.getenv("MONGO_URI")
+aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID")
+aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
 
 # MongoDB Setup
 client = MongoClient(mongo_uri)

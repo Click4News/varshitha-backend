@@ -15,3 +15,6 @@ steps:
       ]
 images:
   - 'gcr.io/$PROJECT_ID/news-app-service'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

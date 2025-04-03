@@ -1,39 +1,31 @@
-# main.py
-from fastapi import FastAPI, HTTPException
-import threading
+
+
 import json
 import uuid
 import boto3
 import time
 import logging
-import os
 from datetime import datetime
 from pymongo import MongoClient
 from botocore.exceptions import ClientError
 from news_summary import extract_text_from_url, summarize_article, classify_news
 from dotenv import load_dotenv
+import os
 
 # Logging setup
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
-app = FastAPI()
-
-# Load environment variables from .env
-#load_dotenv()
-#mongo_uri = os.getenv("MONGO_URI")
-#aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID")
-#aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
-
-mongo_uri =  "mongodb+srv://vasa2949:sandy@cluster0.j5gm2.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-aws_access_key_id = "AKIATX3PIEYISJJ2L74A"
-aws_secret_access_key='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'
 
 # Constants
 AWS_REGION = 'us-east-2'
 QUEUE_NAME = 'test-queue'
 DB_NAME = "newsDB"
 COLLECTION_NAME = "news"
+
+# Load environment variables from .env
+mongo_uri =  "mongodb+srv://vasa2949:sandy@cluster0.j5gm2.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+aws_access_key_id = "AKIATX3PIEYISJJ2L74A"
+aws_secret_access_key='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'
 
 # MongoDB Setup
 client = MongoClient(mongo_uri)
@@ -139,28 +131,16 @@ def consume_messages(queue_url, max_messages=10, wait_time=20, visibility_timeou
                 sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
                 logger.info(f"Deleted message: {message.get('MessageId', 'N/A')}")
 
+        except KeyboardInterrupt:
+            logger.info("Consumer stopped by user.")
+            break
         except Exception as e:
             logger.error(f"Unexpected error: {e}")
             time.sleep(5)
 
-def start_consumer():
-    queue_url = get_queue_url(QUEUE_NAME)
-    consume_messages(queue_url)
-
-# 在啟動時背景執行 SQS 消費
-@app.on_event("startup")
-def startup_event():
-    thread = threading.Thread(target=start_consumer, daemon=True)
-    thread.start()
-    logger.info("Started SQS consumer thread.")
-
-# 健康檢查與基本端點
-@app.get("/")
-async def root():
-    return {"message": "Service is running."}
-
 if __name__ == "__main__":
-    import uvicorn
-    # 讀取 PORT 環境變數，預設使用 8080 以符合 Cloud Build/Cloud Run 要求
-    port = int(os.environ.get("PORT", 8080))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
+    try:
+        queue_url = get_queue_url(QUEUE_NAME)
+        consume_messages(queue_url)
+    except Exception as e:
+        logger.critical(f"Failed to start consumer: {e}")

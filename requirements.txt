@@ -4,5 +4,4 @@ python-dotenv
 requests
 beautifulsoup4
 transformers
-torch
 validators

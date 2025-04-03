@@ -1,32 +1,17 @@
+# cloudbuild.yaml
 steps:
-  # 第一步：建置 Docker 映像
   - name: 'gcr.io/cloud-builders/docker'
-    args:
-      - build
-      - -t
-      - gcr.io/$PROJECT_ID/news-app:$COMMIT_SHA
-      - .
-
-  # 第二步：將映像推送到 Container Registry
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/news-app-service', '.']
   - name: 'gcr.io/cloud-builders/docker'
-    args:
-      - push
-      - gcr.io/$PROJECT_ID/news-app:$COMMIT_SHA
-
-  # 第三步：使用 gcloud 工具部署到 Cloud Run
+    args: ['push', 'gcr.io/$PROJECT_ID/news-app-service']
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: gcloud
     args:
-      - run
-      - deploy
-      - news-app-service    # 您的 Cloud Run 服務名稱，可根據需求自行命名
-      - --image
-      - gcr.io/$PROJECT_ID/news-app:$COMMIT_SHA
-      - --region
-      - us-central1        # 選擇您需要的部署區域
-      - --platform
-      - managed
-      - --allow-unauthenticated
-
+      [
+        'run', 'deploy', 'news-app-service',
+        '--image', 'gcr.io/$PROJECT_ID/news-app-service',
+        '--region', 'us-central1',
+        '--platform', 'managed',
+        '--allow-unauthenticated'
+      ]
 images:
-  - gcr.io/$PROJECT_ID/news-app:$COMMIT_SHA
+  - 'gcr.io/$PROJECT_ID/news-app-service'

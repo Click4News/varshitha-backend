@@ -11,25 +11,25 @@ steps:
         gcloud config set project jon-backend
         gcloud config set compute/zone us-central1-f
 
-  # 2. 直接使用 /workspace 作為來源，傳送所有檔案到 VM 上的 deployment 目錄
+  # 2. 直接複製 Cloud Build 的工作區 /workspace 到 VM 的 ~/deployment 目錄
   - name: 'gcr.io/cloud-builders/gcloud'
     args:
       - compute
       - scp
-      - --recurse
+      - '--recurse'
       - /workspace
       - 'watermelon0101@jonvm:~/deployment'
-      - --zone
+      - '--zone'
       - us-central1-f
 
-  # 3. 登入 VM，執行部署腳本（假設 restart.sh 位於 /workspace/restart.sh）
+  # 3. 在 VM 上進入複製過來的資料夾並執行 restart.sh
   - name: 'gcr.io/cloud-builders/gcloud'
     args:
       - compute
       - ssh
       - 'watermelon0101@jonvm'
-      - --zone
+      - '--zone'
       - us-central1-f
-      - --command
+      - '--command'
       - |
-          cd ~/deployment/workspace && chmod +x restart.sh && ./restart.sh
+          cd ~/deployment && chmod +x restart.sh && ./restart.sh

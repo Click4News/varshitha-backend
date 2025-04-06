@@ -1,0 +1,36 @@
+name: Deploy Code to GCP VM
+
+on:
+  push:
+    branches: [ Test-main-Jon ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v0
+        with:
+          credentials_json: ${{ secrets.SERVICE_ACCOUNT_KEY }}
+
+      - name: Configure gcloud
+        run: |
+          gcloud config set project jon-backend
+          gcloud config set compute/zone ${{ secrets.VM_ZONE }}
+
+      - name: Start VM (optional)
+        run: |
+          gcloud compute instances start ${{ secrets.VM_NAME }}
+
+      - name: Deploy code to VM
+        run: |
+          # 將所有程式碼傳送到 VM 上指定目錄
+          gcloud compute scp --recurse . ${{ secrets.VM_USER }}@${{ secrets.VM_NAME }}:~/deployment
+          
+          # 可選：如果你有 restart.sh 腳本在 VM 上自動啟動應用，則執行以下指令
+          gcloud compute ssh ${{ secrets.VM_USER }}@${{ secrets.VM_NAME }} --command "cd ~/deployment && chmod +x restart.sh && ./restart.sh"

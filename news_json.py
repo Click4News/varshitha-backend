@@ -1,5 +1,3 @@
-
-
 import json
 import uuid
 import boto3
@@ -9,8 +7,18 @@ from datetime import datetime
 from pymongo import MongoClient
 from botocore.exceptions import ClientError
 from news_summary import extract_text_from_url, summarize_article, classify_news
-from dotenv import load_dotenv
 import os
+
+from google.cloud import secretmanager
+
+def get_secret(secret_id, project_id, version_id="latest"):
+    """
+    讀取指定 secret_id 的秘密
+    """
+    client = secretmanager.SecretManagerServiceClient()
+    name = f"projects/{project_id}/secrets/{secret_id}/versions/{version_id}"
+    response = client.access_secret_version(request={"name": name})
+    return response.payload.data.decode("UTF-8")
 
 # Logging setup
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -22,18 +30,20 @@ QUEUE_NAME = 'test-queue'
 DB_NAME = "newsDB"
 COLLECTION_NAME = "news"
 
-# Load environment variables from .env
-load_dotenv()
-mongo_uri = os.getenv("MONGO_URI")
-aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID")
-aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+
+project_id = "jon-backend"  
+
+# Secret Manager read secrets
+mongo_uri = get_secret("MONGO_URI", project_id)
+aws_access_key_id = get_secret("AWS_ACCESS_KEY_ID", project_id)
+aws_secret_access_key = get_secret("AWS_SECRET_ACCESS_KEY", project_id)
 
 # MongoDB Setup
 client = MongoClient(mongo_uri)
 db = client[DB_NAME]
 collection = db[COLLECTION_NAME]
 
-# SQS client with credentials from .env
+# SQS client with credentials from Secret Manager
 sqs = boto3.client(
     "sqs",
     region_name=AWS_REGION,

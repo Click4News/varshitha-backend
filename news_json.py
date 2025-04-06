@@ -13,7 +13,7 @@ from google.cloud import secretmanager
 
 def get_secret(secret_id, project_id, version_id="latest"):
     """
-    讀取指定 secret_id 的秘密 hui
+    讀取指定 secret_id 的秘密 
     """
     client = secretmanager.SecretManagerServiceClient()
     name = f"projects/{project_id}/secrets/{secret_id}/versions/{version_id}"

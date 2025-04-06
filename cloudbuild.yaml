@@ -10,18 +10,25 @@ steps:
         gcloud config set project jon-backend
         gcloud config set compute/zone us-central1-f
 
-  # 2. 直接複製 Cloud Build 的工作區 /workspace 到 VM 的 ~/deployment 目錄
+  # 2. 打包整個 repository，但排除 .git 目錄
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        tar --exclude='.git' -czf deployment.tar.gz -C /workspace .
+
+  # 3. 傳送 tar 檔到 VM 的 ~/deployment 目錄
   - name: 'gcr.io/cloud-builders/gcloud'
     args:
       - compute
       - scp
-      - '--recurse'
-      - /workspace
-      - 'watermelon0101@jonvm:~/deployment'
+      - 'deployment.tar.gz'
+      - 'watermelon0101@jonvm:~/deployment/deployment.tar.gz'
       - '--zone'
       - us-central1-f
 
-  # 3. 在 VM 上進入複製過來的資料夾並執行 restart.sh
+  # 4. 在 VM 上解壓 tar 檔並執行 restart.sh
   - name: 'gcr.io/cloud-builders/gcloud'
     args:
       - compute
@@ -31,4 +38,9 @@ steps:
       - us-central1-f
       - '--command'
       - |
-          cd ~/deployment && chmod +x restart.sh && ./restart.sh
+          mkdir -p ~/deployment &&
+          cd ~/deployment &&
+          tar xzf deployment.tar.gz &&
+          rm deployment.tar.gz &&
+          chmod +x restart.sh &&
+          ./restart.sh

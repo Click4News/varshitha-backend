@@ -11,13 +11,13 @@ steps:
         gcloud config set project jon-backend
         gcloud config set compute/zone us-central1-f
 
-  # 2. 將 repository 壓縮成 tarball
+  # 2. 將 repository 壓縮成 tarball（忽略「file changed」警告）
   - name: 'gcr.io/cloud-builders/docker'
     entrypoint: 'bash'
     args:
       - '-c'
       - |
-        tar czf repo.tar.gz .
+        tar --warning=no-file-changed -czf repo.tar.gz .
 
   # 3. 傳送 tarball 到 VM 的 deployment 目錄
   - name: 'gcr.io/cloud-builders/gcloud'

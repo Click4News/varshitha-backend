@@ -1,5 +1,7 @@
+options:
+  logging: CLOUD_LOGGING_ONLY
+
 steps:
-  # 設定 gcloud 的專案與區域
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
     args:
@@ -8,7 +10,6 @@ steps:
         gcloud config set project jon-backend
         gcloud config set compute/zone us-central1-f
 
-  # 將程式碼傳送到 VM 上的 ~/deployment 目錄
   - name: 'gcr.io/cloud-builders/gcloud'
     args:
       - 'compute'
@@ -19,7 +20,6 @@ steps:
       - '--zone'
       - 'us-central1-f'
 
-  # 在 VM 上執行部署指令：給予 restart.sh 執行權限並執行
   - name: 'gcr.io/cloud-builders/gcloud'
     args:
       - 'compute'

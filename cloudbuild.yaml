@@ -2,46 +2,34 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 steps:
-  # 1. 設定 gcloud 專案與區域
+  # 1. 設定專案與區域
   - name: 'gcr.io/cloud-builders/gcloud'
-    entrypoint: 'bash'
+    entrypoint: bash
     args:
       - '-c'
       - |
         gcloud config set project jon-backend
         gcloud config set compute/zone us-central1-f
 
-  # 2. 將 repository 壓縮成 tarball（忽略「file changed」警告）
-  - name: 'gcr.io/cloud-builders/docker'
-    entrypoint: 'bash'
-    args:
-      - '-c'
-      - |
-        tar --warning=no-file-changed -czf repo.tar.gz .
-
-  # 3. 傳送 tarball 到 VM 的 deployment 目錄
+  # 2. 直接使用 /workspace 作為來源，傳送所有檔案到 VM 上的 deployment 目錄
   - name: 'gcr.io/cloud-builders/gcloud'
     args:
-      - 'compute'
-      - 'scp'
-      - 'repo.tar.gz'
-      - 'watermelon0101@jonvm:~/deployment/repo.tar.gz'
-      - '--zone'
-      - 'us-central1-f'
+      - compute
+      - scp
+      - --recurse
+      - /workspace
+      - 'watermelon0101@jonvm:~/deployment'
+      - --zone
+      - us-central1-f
 
-  # 4. 在 VM 上解壓 tarball 並執行 restart.sh
+  # 3. 登入 VM，執行部署腳本（假設 restart.sh 位於 /workspace/restart.sh）
   - name: 'gcr.io/cloud-builders/gcloud'
     args:
-      - 'compute'
-      - 'ssh'
+      - compute
+      - ssh
       - 'watermelon0101@jonvm'
-      - '--zone'
-      - 'us-central1-f'
-      - '--command'
+      - --zone
+      - us-central1-f
+      - --command
       - |
-          mkdir -p ~/deployment &&
-          cd ~/deployment &&
-          tar xzf repo.tar.gz &&
-          rm repo.tar.gz &&
-          chmod +x restart.sh &&
-          ./restart.sh
+          cd ~/deployment/workspace && chmod +x restart.sh && ./restart.sh

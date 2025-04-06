@@ -22,7 +22,7 @@ steps:
       - '--zone'
       - us-central1-f
 
-  # 3. 在 VM 上進入複製過來的資料夾並執行 restart.sh
+  # 3. 可選步驟：在 VM 上檢查部署結果（例如列出目錄內容）
   - name: 'gcr.io/cloud-builders/gcloud'
     args:
       - compute
@@ -32,4 +32,6 @@ steps:
       - us-central1-f
       - '--command'
       - |
-          cd ~/deployment && chmod +x restart.sh && ./restart.sh
+          echo "部署完成，檔案結構如下："
+          ls -la ~/deployment
+

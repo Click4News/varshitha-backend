@@ -10,15 +10,25 @@ steps:
           gcloud config set project jon-backend
           gcloud config set compute/zone us-central1-f
 
-  # Step 1: 打包整個 repository（排除 .git），忽略 "file changed" 警告
+  # Step 1: 將工作區複製到暫存資料夾，確保工作區不再變動
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: bash
     args:
       - '-c'
       - |
-          tar --warning=no-file-changed --exclude='.git' -czf deployment.tar.gz -C /workspace .
+          echo "Copying /workspace to /tmp/source ..."
+          cp -r /workspace /tmp/source
 
-  # Step 2: 傳送 tar 檔到 VM 的 ~/deployment 目錄
+  # Step 2: 在暫存資料夾中打包（排除 .git），忽略「file changed」警告
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+          echo "Creating tarball from /tmp/source ..."
+          tar --warning=no-file-changed --exclude='.git' -czf deployment.tar.gz -C /tmp/source .
+
+  # Step 3: 傳送 tar 檔到 VM 的 ~/deployment 目錄
   - name: 'gcr.io/cloud-builders/gcloud'
     args:
       - compute
@@ -28,7 +38,7 @@ steps:
       - '--zone'
       - us-central1-f
 
-  # Step 3: 在 VM 上解壓 tar 檔、刪除 tarball，然後執行 restart.sh
+  # Step 4: 在 VM 上解壓 tar 檔、刪除 tarball，並執行 restart.sh
   - name: 'gcr.io/cloud-builders/gcloud'
     args:
       - compute

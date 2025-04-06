@@ -10,15 +10,15 @@ steps:
         gcloud config set project jon-backend
         gcloud config set compute/zone us-central1-f
 
-  # 2. 打包整個 repository，但排除 .git 目錄
+  # 2. 打包整個 repository，但排除 .git 目錄，同時忽略 "file changed" 警告
   - name: 'gcr.io/cloud-builders/docker'
     entrypoint: bash
     args:
       - '-c'
       - |
-        tar --exclude='.git' -czf deployment.tar.gz -C /workspace .
+        tar --warning=no-file-changed --exclude='.git' -czf deployment.tar.gz -C /workspace .
 
-  # 3. 傳送 tar 檔到 VM
+  # 3. 傳送 tar 檔到 VM 的 ~/deployment 目錄
   - name: 'gcr.io/cloud-builders/gcloud'
     args:
       - compute
@@ -28,7 +28,7 @@ steps:
       - '--zone'
       - us-central1-f
 
-  # 4. 在 VM 上解壓 tar 檔並列出目錄內容（或執行其他指令）
+  # 4. 在 VM 上解壓 tar 檔，刪除 tarball 並列出目錄內容（或執行其他指令）
   - name: 'gcr.io/cloud-builders/gcloud'
     args:
       - compute

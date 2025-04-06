@@ -1,24 +1,24 @@
 options:
   logging: CLOUD_LOGGING_ONLY
 steps:
-  # 1. 設定專案與區域
+  # Step 0: 設定專案與區域
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: bash
     args:
       - '-c'
       - |
-        gcloud config set project jon-backend
-        gcloud config set compute/zone us-central1-f
+          gcloud config set project jon-backend
+          gcloud config set compute/zone us-central1-f
 
-  # 2. 打包整個 repository，但排除 .git 目錄，同時忽略 "file changed" 警告
-  - name: 'gcr.io/cloud-builders/docker'
+  # Step 1: 打包整個 repository（排除 .git），忽略 "file changed" 警告
+  - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: bash
     args:
       - '-c'
       - |
-        tar --warning=no-file-changed --exclude='.git' -czf deployment.tar.gz -C /workspace .
+          tar --warning=no-file-changed --exclude='.git' -czf deployment.tar.gz -C /workspace .
 
-  # 3. 傳送 tar 檔到 VM 的 ~/deployment 目錄
+  # Step 2: 傳送 tar 檔到 VM 的 ~/deployment 目錄
   - name: 'gcr.io/cloud-builders/gcloud'
     args:
       - compute
@@ -28,7 +28,7 @@ steps:
       - '--zone'
       - us-central1-f
 
-  # 4. 在 VM 上解壓 tar 檔，刪除 tarball 並列出目錄內容（或執行其他指令）
+  # Step 3: 在 VM 上解壓 tar 檔、刪除 tarball，然後執行 restart.sh
   - name: 'gcr.io/cloud-builders/gcloud'
     args:
       - compute
@@ -42,5 +42,5 @@ steps:
           cd ~/deployment &&
           tar xzf deployment.tar.gz &&
           rm deployment.tar.gz &&
-          echo "部署完成，檔案結構如下：" &&
-          ls -la
+          chmod +x restart.sh &&
+          ./restart.sh

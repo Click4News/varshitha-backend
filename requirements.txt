@@ -3,6 +3,7 @@ pymongo
 python-dotenv
 requests
 beautifulsoup4
-transformers
+transformers==4.51.0
 validators
-torch
+torch==2.6.0
+google-cloud-secret-manager>=2.7.0

@@ -21,7 +21,6 @@ jobs:
       - name: Configure gcloud
         run: |
           gcloud config set project jon-backend
-          gcloud config set compute/zone ${{ secrets.VM_ZONE }}
 
       - name: Start VM (optional)
         run: |

@@ -1,39 +1,31 @@
-options:
-  defaultLogsBucketBehavior: REGIONAL_USER_OWNED_BUCKET
-
-availableSecrets:
-  secretManager:
-    - versionName: "projects/$PROJECT_ID/secrets/MONGO_URI/versions/latest"
-      env: "MONGO_URI"
-    - versionName: "projects/$PROJECT_ID/secrets/AWS_REGION/versions/latest"
-      env: "AWS_REGION"
-    - versionName: "projects/$PROJECT_ID/secrets/AWS_ACCESS_KEY_ID/versions/latest"
-      env: "AWS_ACCESS_KEY_ID"
-    - versionName: "projects/$PROJECT_ID/secrets/AWS_SECRET_ACCESS_KEY/versions/latest"
-      env: "AWS_SECRET_ACCESS_KEY"
-    - versionName: "projects/$PROJECT_ID/secrets/QUEUE_NAME/versions/latest"
-      env: "QUEUE_NAME"
-
 steps:
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$PROJECT_ID/news-app-service', '.']
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/news-app-service']
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  # 設定 gcloud 的專案與區域
+  - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
-    secretEnv:
-      - MONGO_URI
-      - AWS_REGION
-      - AWS_ACCESS_KEY_ID
-      - AWS_SECRET_ACCESS_KEY
-      - QUEUE_NAME
     args:
       - '-c'
-      - >
-        gcloud run deploy news-app-service
-        --image gcr.io/$PROJECT_ID/news-app-service
-        --region us-central1
-        --platform managed
-        --allow-unauthenticated
-images:
-  - 'gcr.io/$PROJECT_ID/news-app-service'
+      - |
+        gcloud config set project jon-backend
+        gcloud config set compute/zone us-central1-f
+
+  # 將程式碼傳送到 VM 上的 ~/deployment 目錄
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args:
+      - 'compute'
+      - 'scp'
+      - '--recurse'
+      - '.'
+      - 'watermelon0101@jonvm:~/deployment'
+      - '--zone'
+      - 'us-central1-f'
+
+  # 在 VM 上執行部署指令：給予 restart.sh 執行權限並執行
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args:
+      - 'compute'
+      - 'ssh'
+      - 'watermelon0101@jonvm'
+      - '--zone'
+      - 'us-central1-f'
+      - '--command'
+      - 'cd ~/deployment && chmod +x restart.sh && ./restart.sh'

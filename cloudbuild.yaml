@@ -1,3 +1,5 @@
+options:
+  logging: CLOUD_LOGGING_ONLY
 steps:
   # 1. 設定專案與區域
   - name: 'gcr.io/cloud-builders/gcloud'

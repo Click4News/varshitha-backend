@@ -1,5 +1,6 @@
 options:
   logging: CLOUD_LOGGING_ONLY
+
 steps:
   # Step 0: 設定專案與區域
   - name: 'gcr.io/cloud-builders/gcloud'
@@ -10,26 +11,18 @@ steps:
           gcloud config set project jon-backend
           gcloud config set compute/zone us-central1-f
 
-  # Step 1: 建立 /tmp/source 資料夾並複製工作區內容到此處
+  # Step 1: 複製 + 打包（排除 .git）避免 workspace 被改動
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: bash
     args:
       - '-c'
       - |
-          echo "建立 /tmp/source 並複製 /workspace 內容..."
+          echo "Copying and creating tarball..."
           mkdir -p /tmp/source
-          cp -r /workspace/* /tmp/source
-
-  # Step 2: 從 /tmp/source 打包成 tarball（排除 .git，並忽略 file changed 警告）
-  - name: 'gcr.io/cloud-builders/gcloud'
-    entrypoint: bash
-    args:
-      - '-c'
-      - |
-          echo "從 /tmp/source 打包..."
+          cp -r /workspace/* /tmp/source/
           tar --warning=no-file-changed --exclude='.git' -czf deployment.tar.gz -C /tmp/source .
 
-  # Step 3: 傳送 tar 檔到 VM 的 ~/deployment 目錄
+  # Step 2: 傳送 tar 檔到 VM 的 ~/deployment
   - name: 'gcr.io/cloud-builders/gcloud'
     args:
       - compute
@@ -39,7 +32,7 @@ steps:
       - '--zone'
       - us-central1-f
 
-  # Step 4: 在 VM 上解壓 tar 檔、刪除 tarball，並執行 restart.sh
+  # Step 3: 在 VM 解壓、執行 restart.sh
   - name: 'gcr.io/cloud-builders/gcloud'
     args:
       - compute

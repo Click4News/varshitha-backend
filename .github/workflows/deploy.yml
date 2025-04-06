@@ -27,10 +27,19 @@ jobs:
         run: |
           gcloud compute instances start ${{ secrets.VM_NAME }} --zone ${{ secrets.VM_ZONE }}
 
-      - name: Deploy code to VM
-        run: |
-          # 將所有程式碼傳送到 VM 上指定目錄
-          gcloud compute scp --recurse . ${{ secrets.VM_USER }}@${{ secrets.VM_NAME }}:~/deployment --zone ${{ secrets.VM_ZONE }}
-          
-          # 如果有 restart.sh 腳本在 VM 上自動啟動應用，則執行以下指令
-          gcloud compute ssh ${{ secrets.VM_USER }}@${{ secrets.VM_NAME }} --zone ${{ secrets.VM_ZONE }} --command "cd ~/deployment && chmod +x restart.sh && ./restart.sh"
+      - name: Deploy code to VM using SSH
+        uses: appleboy/ssh-action@v0.1.8
+        with:
+          host: ${{ secrets.VM_IP }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            echo "同步程式碼到部署目錄..."
+            # 若尚未存在部署目錄，先建立之
+            mkdir -p ~/deployment
+            # 利用 rsync 同步所有程式碼到 VM（也可以改用 scp）
+            rsync -avz --delete . ~/deployment/
+            echo "執行 restart.sh..."
+            cd ~/deployment
+            chmod +x restart.sh
+            ./restart.sh

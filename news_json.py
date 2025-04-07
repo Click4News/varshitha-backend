@@ -19,13 +19,16 @@ def get_secret(secret_id, project_id, version_id="latest"):
     name = f"projects/{project_id}/secrets/{secret_id}/versions/{version_id}"
     response = client.access_secret_version(request={"name": name})
     return response.payload.data.decode("UTF-8")
-    
+
+# Logging setup
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # Constants
 AWS_REGION = 'us-east-2'
 QUEUE_NAME = 'test-queue'
-DB_NAME = "sqsMessagesDB"
-COLLECTION_NAME = "raw_messages"
+DB_NAME = "newsDB"
+COLLECTION_NAME = "news"
 
 
 project_id = "jon-backend"  
@@ -40,116 +43,70 @@ client = MongoClient(mongo_uri)
 db = client[DB_NAME]
 collection = db[COLLECTION_NAME]
 
-# Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+# SQS client with credentials from Secret Manager
+sqs = boto3.client(
+    "sqs",
+    region_name=AWS_REGION,
+    aws_access_key_id=aws_access_key_id,
+    aws_secret_access_key=aws_secret_access_key
+)
 
-
-def get_queue_url(queue_name, create_if_not_exists=True):
-    region_name = 'us-east-2'
-    sqs = boto3.client('sqs', region_name=region_name)
+def get_queue_url(queue_name):
+    """Returns SQS queue URL"""
     try:
         response = sqs.get_queue_url(QueueName=queue_name)
-        logger.info(f"Found existing queue: {queue_name}")
         return response['QueueUrl']
     except ClientError as e:
-        if e.response['Error']['Code'] == 'AWS.SimpleQueueService.NonExistentQueue' and create_if_not_exists:
-            logger.info(f"Queue {queue_name} does not exist. Creating it...")
-            response = sqs.create_queue(QueueName=queue_name)
-            logger.info(f"Successfully created queue: {queue_name}")
-            return response['QueueUrl']
-        else:
-            logger.error(f"Error getting queue URL: {e}")
-            raise
+        logger.error(f"Error getting queue URL: {e}")
+        raise
 
+def process_news(news_event):
+    """Processes a single news JSON object into GeoJSON format and stores in MongoDB."""
+    news_url = news_event.get("url")
+    title = news_event.get("title", "Untitled News")
 
-from news_summary import extract_text_from_url, summarize_article, classify_news
+    if not news_url or not isinstance(news_url, str):
+        logger.warning(f"Invalid URL: {news_url}")
+        return None
 
-def process_message(message):
-    message_id = message.get('MessageId', 'unknown')
-    receipt_handle = message.get('ReceiptHandle')
+    extracted_text = extract_text_from_url(news_url)
+    if extracted_text in ["Content extraction failed.", "Failed to fetch the article."]:
+        logger.warning(f"Error processing URL: {news_url}")
+        return None
 
-    try:
-        body = message.get('Body', '{}')
-        attributes = message.get('MessageAttributes', {})
-        attribute_values = {k: v.get('StringValue') for k, v in attributes.items()}
+    summary = summarize_article(extracted_text)
+    category = classify_news(summary)
+    news_id = str(uuid.uuid4())
 
-        try:
-            body_json = json.loads(body)
-            logger.info(f"Processing JSON message: {message_id}")
-        except json.JSONDecodeError:
-            body_json = {"raw_text": body}
-            logger.info(f"Processing plain text message: {message_id}")
+    coordinates = [-74.006, 40.7128]  # Default: New York
 
-        title = body_json.get("title", "Untitled News")
-        url = body_json.get("url")
-
-        # Only extract summary + category if URL is valid
-        if url and isinstance(url, str):
-            extracted_text = extract_text_from_url(url)
-            summary = summarize_article(extracted_text)
-            category = classify_news(summary)
-        else:
-            summary = "No summary available"
-            category = "Uncategorized"
-            url = "N/A"
-
-        coordinates = [-74.006, 40.7128]
-
-        geojson_news = {
-            "type": "FeatureCollection",
-            "features": [
-                {
-                    "type": "Feature",
-                    "geometry": {
-                        "type": "Point",
-                        "coordinates": coordinates
-                    },
-                    "properties": {
-                        "density" : 5,
-                        "message_id": message_id,
-                        "title": title,
-                        "summary": summary,
-                        "link": url,
-                        "category": category,
-                        "attributes": attribute_values,
-                        "timestamp": time.time()
-                    }
+    geojson_news = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": coordinates
+                },
+                "properties": {
+                    "title": title,
+                    "summary": summary,
+                    "link": news_url,
+                    "category": category
                 }
-            ]
-        }
+            }
+        ]
+    }
 
-        collection.insert_one(geojson_news)
-        logger.info(f"Stored message {message_id} in MongoDB")
+    inserted = collection.insert_one(geojson_news)
+    geojson_news["_id"] = str(inserted.inserted_id)
+    logger.info(f"Stored news: {title}")
+    return geojson_news
 
-        return geojson_news, receipt_handle
-
-    except Exception as e:
-        logger.error(f"Error processing message {message_id}: {e}")
-        return None, receipt_handle
-
-
-def delete_message(queue_url, receipt_handle):
-    region_name = 'us-east-2'
-    sqs = boto3.client('sqs', region_name=region_name)
-    try:
-        sqs.delete_message(
-            QueueUrl=queue_url,
-            ReceiptHandle=receipt_handle
-        )
-        return True
-    except ClientError as e:
-        logger.error(f"Error deleting message: {e}")
-        return False
-
-
-def consume_messages(queue_name, max_messages=10, wait_time=20, visibility_timeout=30):
-    queue_url = get_queue_url(queue_name)
-    logger.info(f"Consuming messages from {queue_name}")
-
-    region_name = 'us-east-2'
-    sqs = boto3.client('sqs', region_name=region_name)
-
+def consume_messages(queue_url, max_messages=10, wait_time=20, visibility_timeout=30):
+    """Continuously consumes and processes messages from SQS."""
+    logger.info(f"Listening to SQS queue: {QUEUE_NAME}")
     while True:
         try:
             response = sqs.receive_message(
@@ -157,45 +114,44 @@ def consume_messages(queue_name, max_messages=10, wait_time=20, visibility_timeo
                 MaxNumberOfMessages=max_messages,
                 WaitTimeSeconds=wait_time,
                 VisibilityTimeout=visibility_timeout,
-                MessageAttributeNames=['All']
+                MessageAttributeNames=["All"]
             )
 
-            messages = response.get('Messages', [])
+            messages = response.get("Messages", [])
             if not messages:
-                logger.info("No messages received. Continuing to poll...")
+                logger.info("No messages received. Polling again...")
                 continue
 
-            logger.info(f"Received {len(messages)} messages")
-
             for message in messages:
-                geojson_result, receipt_handle = process_message(message)
-                if geojson_result and receipt_handle:
-                    deleted = delete_message(queue_url, receipt_handle)
-                if deleted:
-                    logger.info(f"Deleted message {message.get('MessageId')}")
-                else:
-                    logger.warning(f"Failed to delete message {message.get('MessageId')}")
+                raw_body = message.get("Body", "")
+                if not raw_body.strip():
+                    logger.warning("Skipped empty message.")
+                    continue
 
+                try:
+                    parsed_body = json.loads(raw_body)
+                    if isinstance(parsed_body, list):
+                        for item in parsed_body:
+                            process_news(item)
+                    else:
+                        process_news(parsed_body)
+                except json.JSONDecodeError as e:
+                    logger.error(f"JSON decode error: {e} — Raw: {raw_body}")
+
+                receipt_handle = message["ReceiptHandle"]
+                sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
+                logger.info(f"Deleted message: {message.get('MessageId', 'N/A')}")
 
         except KeyboardInterrupt:
-            logger.info("Stopping consumer...")
+            logger.info("Consumer stopped by user.")
             break
-
         except Exception as e:
-            logger.error(f"Error in message consumption loop: {e}")
+            logger.error(f"Unexpected error: {e}")
             time.sleep(5)
 
-
 if __name__ == "__main__":
-    QUEUE_NAME = 'test-queue'
-    MAX_MESSAGES = 5
-    WAIT_TIME = 20
-    VISIBILITY_TIMEOUT = 60
-
-    logger.info(f"Starting SQS consumer for queue {QUEUE_NAME}")
-    consume_messages(
-        queue_name=QUEUE_NAME,
-        max_messages=MAX_MESSAGES,
-        wait_time=WAIT_TIME,
-        visibility_timeout=VISIBILITY_TIMEOUT
-    )
+    try:
+        queue_url = get_queue_url(QUEUE_NAME)
+        consume_messages(queue_url)
+    except Exception as e:
+        logger.critical(f"Failed to start consumer: {e}")
